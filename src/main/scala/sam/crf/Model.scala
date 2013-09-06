@@ -9,7 +9,8 @@ class Model(domainFile : String, labelDomainSize : Int, ff : (String=>Array[Int]
 	
 	val weights = new Weights(featuresDomain, labelDomain)
 	val chains = new ArrayBuffer[Chain]()
-	
+  var datasetSize = 0
+
 	def recursiveListFiles(f: File): Array[File] = {
 	  val these = f.listFiles
 	  if(!these.filter(_.isDirectory).isEmpty)
@@ -22,8 +23,14 @@ class Model(domainFile : String, labelDomainSize : Int, ff : (String=>Array[Int]
 		for(file <- files)
 			chains += new Chain(weights,ff).loadChain(file.getAbsolutePath())
 	}
-	
-	def setTransitionWeights(file : String) {
+
+  def loadChainsTrain(dir : String) {
+    val files = recursiveListFiles(new File(dir))
+    for(file <- files)
+      chains += new Chain(weights,ff).loadChain(file.getAbsolutePath())
+  }
+
+  def setTransitionWeights(file : String) {
 		var count = 0
 		for(line <- Source.fromFile(file).getLines()) {
 			weights.transWeights(count) = line.toDouble
@@ -44,7 +51,8 @@ class Model(domainFile : String, labelDomainSize : Int, ff : (String=>Array[Int]
 	
 	def test(dir : String) {
 		loadChains(dir)
-		for(chain <- chains) {
+    datasetSize = chains.length
+    for(chain <- chains) {
 			val sp = new SumProduct(chain)
 			sp.inferUpDown()
 			sp.setToMaxMarginal()
@@ -52,6 +60,14 @@ class Model(domainFile : String, labelDomainSize : Int, ff : (String=>Array[Int]
 			println("")
 		}
 	}
+
+  def train(dir : String) {
+    loadChains(dir)
+    datasetSize = chains.length
+    val trainer = new LBFGSTrainer(this)
+    trainer.optimize()
+  }
+
 }
 
 class FeaturesDomain(val file : String) {
@@ -70,11 +86,18 @@ class LabelDomain(val until : Int) {
 class Weights(val features : FeaturesDomain, val labels : LabelDomain) {
 	val obsWeights = new Array[Array[Double]](features.size)
 	var count = 0
+  val dimension = 0 // TODO: Set to actual dimension
 	for(feature <- features.features) {
 		obsWeights(count) = new Array[Double](feature.size*labels.until)
 	}
-	
-	def unroll(weights : Array[Double]) : Weights= {
+
+  def setWeights(wts : Array[Double]) {
+    //Set the weights from the wts vector here.
+  }
+
+  def getWeights : Array[Double] = obsWeights.flatten ++ transWeights
+
+  /*def unroll(weights : Array[Double]) : Weights = {
 		var c = 0
 		var f = 0
 		for(i <- 0 until features.features.size) {
@@ -87,7 +110,7 @@ class Weights(val features : FeaturesDomain, val labels : LabelDomain) {
 			f += 1
 		}
 		this
-	}
+	}*/
 	
 	val transWeights = new Array[Double](labels.until*labels.until)
 	
@@ -121,7 +144,7 @@ class Weights(val features : FeaturesDomain, val labels : LabelDomain) {
 	def apply(y1 : Int, yPlus : Int) : Double = {
 		transWeights( ((yPlus-1)*labels.until)+(y1-1) )
 	}
-	
+
 	def print() {
 		for(f <- obsWeights) {
 			for(i <- f) {

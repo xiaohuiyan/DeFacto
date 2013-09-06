@@ -1,7 +1,7 @@
 package sam.crf
 
 import scala.collection.mutable.ArrayBuffer
-class Clique(val size : Int) {
+class Clique(val size : Int, val i : Int) {
 	var index : Int = -1
 	var factors = List[Factor]()
 	def addFactor(factor : Factor) {
@@ -12,12 +12,21 @@ class Clique(val size : Int) {
 	var prev : Clique = null
 	
 	val table : Array[Double] = new Array[Double](size*size)
-	
-	def decode(i : Int) : (Int, Int) = ( ( (i%size)+1 ), ( (i/size)+1 ) )
+
+  val logTable : Array[Double] = new Array[Double](size*size)
+
+  def decode(i : Int) : (Int, Int) = ( ( (i%size)+1 ), ( (i/size)+1 ) )
 	
 	def apply(yi : Int, yPlus : Int) : Double = table( ( (yPlus-1)*size) + (yi-1) )
-	
-	def compute() {		
+  def log(yi : Int, yPlus : Int) : Double = logTable( ( (yPlus-1)*size) + (yi-1) )
+
+  def trueLog() : Double = {
+    val yi = transFactor.left.targetValue
+    val yPlus = transFactor.right.targetValue
+    logTable( ( (yPlus-1)*size) + (yi-1) )
+  }
+
+  def compute() {
 		//println("Clique " + index + " id " + this)
 		/*println("size: " + factors.size)
 		for(factor <- factors) factor match {
@@ -40,8 +49,26 @@ class Clique(val size : Int) {
 			if(obsFactors(1) != null) table(i) *= obsFactors(1)(idx._2)
 		} 
 	}
-	
-	def print() {
+
+  def logCompute() {
+    var obsFactors = new Array[ObservationFactor](2)
+    for (factor <- factors)	if(factor.isInstanceOf[TransitionFactor]) transFactor = factor.asInstanceOf[TransitionFactor]
+    for (factor <- factors) {
+      if(factor.isInstanceOf[ObservationFactor]) obsFactors(factor.asInstanceOf[ObservationFactor].index-transFactor.y) = factor.asInstanceOf[ObservationFactor]
+    }
+    for(i <- 0 until (size*size)) {
+      val idx = decode(i)
+      logTable(i) = transFactor.log(idx._1, idx._2)
+      //println("i: " + i)
+      //println("idx: " + idx)
+
+      if(obsFactors(0) != null) logTable(i) += obsFactors(0)(idx._1)
+      if(obsFactors(1) != null) logTable(i) += obsFactors(1)(idx._2)
+    }
+  }
+
+
+  def print() {
 		println(index)
 		for(i <- 1 to size) {
 			for(j <- 1 to size) {

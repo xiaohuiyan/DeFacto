@@ -16,6 +16,16 @@ class ObservationFactor(val observation : Observation, val label : Label, weight
 		}
 		exp(sum)
 	}
+  def log(klass : Int) : Double = {
+    var sum = 0.0
+    var count = 0
+    for(feature <- observation.features) {
+      sum += weights(klass, count, feature)
+      count += 1
+    }
+    sum
+  }
+
 }
 class TransitionFactor(val left : Label, val right : Label, weights : Weights) extends Factor(weights) {
 	left.rightFactor = this
@@ -23,6 +33,7 @@ class TransitionFactor(val left : Label, val right : Label, weights : Weights) e
 	val y = left.index
 	val yiPlus = right.index 
 	def apply(yi : Int, yPlus : Int) : Double = exp(weights(yi, yPlus))
-	
-	def size = weights.labels.until
+  def log(yi : Int, yPlus : Int) : Double = weights(yi, yPlus)
+
+  def size = weights.labels.until
 }

@@ -68,13 +68,14 @@ class SumProduct(chain : Chain) {
 		}
 	}
 	
-	def inferUpDown() {
+	def inferUpDown() : SumProduct = {
 		computeMessages()
 		//printMessages()
 		computeBeliefs()
 		Z = beliefs(0).sum
 		//printBeliefs()
 		//printZ()
+    this
 	}
 	
 	def printMessages() {

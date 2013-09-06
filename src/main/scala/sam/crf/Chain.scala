@@ -2,11 +2,17 @@ package sam.crf
 
 import scala.io.Source
 import scala.collection.mutable.ArrayBuffer
-class Chain(val weights : Weights, val ff : (String=>Array[Int])) {
+class Chain(val weights : Weights, val ff : (String=>Array[Int])) extends Iterable[Clique] {
 	var end : Label = null
 	var startClique : Clique = null
 	var cliqueSize : Int = 0
-	
+
+  object iterator extends Iterator[Clique] {
+    var current = startClique
+    def next() = { current = current.next; current }
+    def hasNext = current.next != null
+  }
+
 	// Load chain takes in a sentence file and compiles a CRF chain
 	def loadChain(file : String) : Chain = {
 		var prev : Label = null
@@ -15,9 +21,8 @@ class Chain(val weights : Weights, val ff : (String=>Array[Int])) {
 			val split = line.split(",")
 			val obs = new Observation(count, split(0),ff(line))
 			val lab = new Label(count, split(1))
-			val observationFactor = new ObservationFactor(obs, lab, weights)
+			new ObservationFactor(obs, lab, weights)
 			if(prev != null) new TransitionFactor(prev, lab, weights)
-
 			prev = lab
 			count += 1
 		}
@@ -59,7 +64,7 @@ class Chain(val weights : Weights, val ff : (String=>Array[Int])) {
 		var count = 0
 		var clique : Clique = null
 		while(pointer != null) {
-			clique = new Clique(weights.labels.until)
+			clique = new Clique(weights.labels.until, count+1)
 			if(first) {
 				first = false
 				clique.addFactor(pointer.right.observationFactor)
@@ -75,7 +80,7 @@ class Chain(val weights : Weights, val ff : (String=>Array[Int])) {
 		startClique = clique
 		cliqueSize = count
 		count = 0
-	    var current : Clique = clique
+	  var current : Clique = clique
 		while(current != null) {
 			current.index = count
 			current = current.next
