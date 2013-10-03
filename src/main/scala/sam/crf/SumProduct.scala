@@ -26,6 +26,8 @@ class SumProduct(chain : Chain) {
 				}
 				message(i) = sum
 			}
+			val messageSum = message.sum
+			for(i <- 0 until clique.size) message(i) /= messageSum
 			messagesForward.append(message)
 			last = current
 			current = current.next
@@ -42,6 +44,8 @@ class SumProduct(chain : Chain) {
 				}
 				message(i) = sum
 			}
+			val messageSum = message.sum
+			for(i <- 0 until clique.size) message(i) /= messageSum
 			messagesBackward.append(message)
 			current = current.prev
 		} 
