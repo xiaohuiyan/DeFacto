@@ -11,7 +11,7 @@ class Observation(val index : Int, val token : String, listFeatures : Array[Int]
 
 class Label(val index : Int, val target : String) extends Node {
 	var value : Int = -1
-  val targetValue : Int = 0 // TODO: Set to target value
+  val targetValue : Int = target.toInt
 	var leftFactor : TransitionFactor = null
 	var rightFactor : TransitionFactor = null
 	var observationFactor : ObservationFactor = null

@@ -20,8 +20,11 @@ class Model(domainFile : String, labelDomainSize : Int, ff : (String=>Array[Int]
 	
 	def loadChains(dir : String) {
 		val files = recursiveListFiles(new File(dir))
-		for(file <- files)
+    var count = 0
+		for(file <- files; if(count < 5)) {
 			chains += new Chain(weights,ff).loadChain(file.getAbsolutePath())
+      count += 1
+    }
 	}
 
   def loadChainsTrain(dir : String) {
@@ -68,6 +71,10 @@ class Model(domainFile : String, labelDomainSize : Int, ff : (String=>Array[Int]
     trainer.optimize()
   }
 
+  def saveWeights(dir : String) {
+    // Save the weights to disk
+  }
+
 }
 
 class FeaturesDomain(val file : String) {
@@ -86,13 +93,32 @@ class LabelDomain(val until : Int) {
 class Weights(val features : FeaturesDomain, val labels : LabelDomain) {
 	val obsWeights = new Array[Array[Double]](features.size)
 	var count = 0
-  val dimension = 0 // TODO: Set to actual dimension
-	for(feature <- features.features) {
+
+  for(feature <- features.features) {
 		obsWeights(count) = new Array[Double](feature.size*labels.until)
+    count += 1
 	}
+
+  val transWeights = new Array[Double](labels.until*labels.until)
+
+
+  val dimension = obsWeights.map(_.length).sum + transWeights.length // TODO: Set to actual dimension
+  val obsWeightsSize = obsWeights.map(_.length).sum // TODO: Set to actual dimension
+
 
   def setWeights(wts : Array[Double]) {
     //Set the weights from the wts vector here.
+    var count = 0
+    for(f <-  0 until features.features.size) {
+      for(v <- 0 until (features.features(f).size * labels.until) ) {
+        obsWeights(f)(v) = wts(count)
+        count += 1
+      }
+    }
+    for(i <- 0 until transWeights.length) {
+      transWeights(i) = wts(count)
+      count += 1
+    }
   }
 
   def getWeights : Array[Double] = obsWeights.flatten ++ transWeights
@@ -111,9 +137,7 @@ class Weights(val features : FeaturesDomain, val labels : LabelDomain) {
 		}
 		this
 	}*/
-	
-	val transWeights = new Array[Double](labels.until*labels.until)
-	
+
 	def decode(i : Int) : (Int, Int, Int) = {
 		var klass = 1
 		var feat = 0
@@ -140,6 +164,11 @@ class Weights(val features : FeaturesDomain, val labels : LabelDomain) {
 		//println( ((klass-1)*labels.until) + (value-features.features(feature)(0)) )
 		obsWeights(feature)( ((klass-1)*features.features(feature).size) + (value-features.features(feature)(0)) )
 	}
+
+  def index(feature : Int, klass : Int, value : Int) : Int = {
+      val featureCount = obsWeights.take(feature).map(_.length).sum
+      featureCount + klass*features.features(feature).size + value
+  }
 	
 	def apply(y1 : Int, yPlus : Int) : Double = {
 		transWeights( ((yPlus-1)*labels.until)+(y1-1) )
@@ -158,5 +187,30 @@ class Weights(val features : FeaturesDomain, val labels : LabelDomain) {
 		}
 		println("")
 	}
+
+  def printWithName() {
+    var to = 0
+    var count = 0
+    for(f <- obsWeights) {
+      println("Feature: " + count)
+      var count2 = 0
+      for(i <- f) {
+        if(count2 % labels.until == 0) println("Label: " + count2/labels.until)
+        println("Feature value: " + count2 % labels.until)
+        println(i)
+        count2 += 1
+        to += 1
+      }
+      println("")
+      count += 1
+    }
+    println("Transition:")
+    for(t <- transWeights) {
+      println(t)
+      to += 1
+    }
+    println("Total: " + to )
+    println("")
+  }
 	
 }

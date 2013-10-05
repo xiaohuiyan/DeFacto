@@ -24,45 +24,65 @@ class LBFGSTrainer(val model : Model) {
     def compute(datums : Iterable[Chain]) : IPair[java.lang.Double, Array[Double]] =  {
       var logLike = 0.0
       val grad = new Array[Double](model.weights.dimension)
+      var count = 0
+      println(s"Running on ${datums.size} amount of data.")
+      println(s"Dimention is= ${grad.size}")
       for (chain <- datums) {
+        println("data item: " + count)
+        count += 1
         val sp = new SumProduct(chain).inferUpDown()
         //  Obj Fn
         //  logLike += log P( correct-sequence | input)  =  sum( true-log-pots ) - logZ
         //  grad +=  (Empirical-Feat-Counts - Expected-Feat-Counts)
 
         // Objective Component
-        logLike += chain.map( _.trueLog() ).sum // Sum the log potential value given the true labels and add to logLike
-        logLike -= math.log(sp.Z) // Subtract the log of Z from the loglikeliehood
-
+        logLike += chain.iterator.map( _.trueLog() ).sum // Sum the log potential value given the true labels and add to logLike
+        logLike -= math.log(sp.Z) // Subtract the log of Z from the log likelyhood
         // Graident Component
         // Empirical
-        for (clique <- chain) {
+        for (clique <- chain.iterator) {
           val observationFactor = clique.factors.filter(_.isInstanceOf[ObservationFactor]).map(_.asInstanceOf[ObservationFactor]).head
           for (i <- model.labelDomain.labels) {
             // Empirical State Feats
             for(f <- observationFactor.observation.features.zipWithIndex) {
-              val value = if(i==observationFactor.label.targetValue) f._1.toDouble else 0.0
-              grad(f._2*(i-1)/*TODO: Set to label index. Include label as factor in index.*/) += value
+              val value = if(i==observationFactor.label.targetValue) 1 else 0.0
+              val featureIndex = f._2
+              val klass = i-1
+              val valueIndex = f._1-model.featuresDomain.features(f._2)(0)
+              //println(s"Index: ${model.weights.index(featureIndex,klass,valueIndex)}")
+              grad(model.weights.index(featureIndex,klass,valueIndex)) += value
             }
             // Empirical Trans Feat
             for(j <- model.labelDomain.labels) {
               val secondFactor = if(clique.next != null) clique.next.factors.filter(_.isInstanceOf[ObservationFactor]).map(_.asInstanceOf[ObservationFactor]).head else clique.factors.filter(_.isInstanceOf[ObservationFactor]).map(_.asInstanceOf[ObservationFactor]).last
               val value = if(observationFactor.label.targetValue==i && secondFactor.label.targetValue==j) 1.0 else 0.0
-              grad((i-1)*(j-1) + model.featuresDomain.size*model.labelDomain.labels.size) += value
+              grad(model.labelDomain.until*(j-1)+(i-1) + model.weights.obsWeightsSize) += value
+              //println("Index: " + (model.labelDomain.until*(i-1)+(j-1) + model.weights.obsWeightsSize))
             }
           }
         }
         // Expected
-        for (clique <- chain) {
+        for (clique <- chain.iterator) {
           for (i <- model.labelDomain.labels) {
             val observationFactor = clique.factors.filter(_.isInstanceOf[ObservationFactor]).map(_.asInstanceOf[ObservationFactor]).head
             // Node
             for (f <- observationFactor.observation.features.zipWithIndex) {
-              grad(f._2*(i-1)/*TODO: Set to label index*/) -=  f._1*sp(clique.index)(i)
+              for(fv <- model.featuresDomain.features(f._2).zipWithIndex) {
+                val index = clique.index+1
+                val s = sp(index)
+                val spIndex = i-1
+                val gradI = f._2*(i-1)+fv._2
+                val featureIndex = f._2
+                val klass = i-1
+                val valueIndex = fv._2
+                if(f._1==fv._1)  grad(model.weights.index(featureIndex,klass,valueIndex)) -=  sp(index)(spIndex)
+                if(sp(index)(spIndex).isNaN)
+                  println("NaN")
+              }
             }
             // Transition
             for (j <- model.labelDomain.labels) {
-              grad((i-1)*(j-1) + model.featuresDomain.size/*TODO: Set to correct weight index*/) -= sp(clique.i, clique.i+1)(i+j)
+              grad(model.labelDomain.until*(j-1)+(i-1) + model.weights.obsWeightsSize) -= sp(clique.i, clique.i+1)(i+j)
             }
           }
         }
@@ -71,7 +91,7 @@ class LBFGSTrainer(val model : Model) {
     }
 
     def computeAt(x : Array[Double]) : IPair[java.lang.Double, Array[Double]] = {
-      model.weights.setWeights(x);
+      model.weights.setWeights(x)
       var logLike = 0.0
       var grad : Array[Double] = null
 
@@ -83,22 +103,11 @@ class LBFGSTrainer(val model : Model) {
       logLike *= -1.0;
       grad = grad.map( _ * -1.0)
 
-      /*if (opts.regularizer != null) {
-        IPair<Double, double[]> res = opts.regularizer.apply(x);
-        logLike += res.getFirst();
-        DoubleArrays.addInPlace(grad, res.getSecond());
-      }*/
-      //      for (int i = 0; i < x.length; i++) {
-      //        double w = x[i];
-      //        logLike += (0.5 * w * w) / sigmaSquared;
-      //        grad[i] += w / sigmaSquared;
-      //      }
-      //      logger.info("Num Feats: " + x.length);
-      //      logger.info("Grad: " + DoubleArrays.toString(grad,10));
-      //      logger.info("Weights: " + DoubleArrays.toString(x,10));
-      //      logger.info("Value: " + logLike);
-      //if (true) System.exit(0);
-      println("Done with Computing Objective");
+            println("Num Feats: " + x.length);
+            println("Grad: " + (grad).mkString(", "))
+            println("Weights: " + x.mkString(", "))
+            println("Value: " + logLike)
+            println("Done with Computing Objective");
 
       BasicPair.make(logLike, grad)
     }

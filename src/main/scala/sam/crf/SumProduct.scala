@@ -22,7 +22,8 @@ class SumProduct(chain : Chain) {
 				var sum = 0.0
 				for(j <- 0 until clique.size) {
 					var mult = if(current.prev != null) messagesForward(current.index-1)(j) else 1
-					sum += (current(j+1,i+1) * mult)
+					//sum += (current(j+1,i+1) * mult)
+
 				}
 				message(i) = sum
 			}
@@ -128,6 +129,8 @@ class SumProduct(chain : Chain) {
 				marginals.append(sum)
 			}
 		}
+    if(marginals.head.isNaN || Z.isNaN)
+      println("NaN")
 		marginals.toArray.map(_/Z)
 	}
 	

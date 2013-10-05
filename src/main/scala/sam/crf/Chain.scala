@@ -7,10 +7,10 @@ class Chain(val weights : Weights, val ff : (String=>Array[Int])) extends Iterab
 	var startClique : Clique = null
 	var cliqueSize : Int = 0
 
-  object iterator extends Iterator[Clique] {
-    var current = startClique
-    def next() = { current = current.next; current }
-    def hasNext = current.next != null
+  def iterator = new Iterator[Clique] {
+    var current : Clique = startClique
+    def next() = { val r = current; current = current.next; r }
+    def hasNext = current != null
   }
 
 	// Load chain takes in a sentence file and compiles a CRF chain
@@ -19,7 +19,7 @@ class Chain(val weights : Weights, val ff : (String=>Array[Int])) extends Iterab
 		var count = 0
 		for(line <- Source.fromFile(file).getLines()) {
 			val split = line.split(",")
-			val obs = new Observation(count, split(0),ff(line))
+			val obs = new Observation(count, split(0), ff(line))
 			val lab = new Label(count, split(1))
 			new ObservationFactor(obs, lab, weights)
 			if(prev != null) new TransitionFactor(prev, lab, weights)
@@ -78,7 +78,7 @@ class Chain(val weights : Weights, val ff : (String=>Array[Int])) extends Iterab
 			count += 1
 		}
 		startClique = clique
-		cliqueSize = count
+    cliqueSize = count
 		count = 0
 	  var current : Clique = clique
 		while(current != null) {
