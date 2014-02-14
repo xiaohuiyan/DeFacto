@@ -12,7 +12,7 @@ object Part1 {
 			println("Usage: Part1 [featuresDomain] [sizeOfLabel] [testDirectory] [transitionWeights] [observationWeights]")
 			sys.exit(0)
 		}
-    val model = new Model(args(1), args(2).toInt, extractFeatures)
+    val model = new ChainModel(args(1), args(2).toInt, extractFeatures)
 		model.setTransitionWeights(args(4))
 		model.setObservationWeights(args(5))
     //model.train(new SampleRankTrainer)

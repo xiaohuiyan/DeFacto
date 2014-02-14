@@ -19,12 +19,6 @@ class LogSumProduct(chain : Chain) {
     while(current.next != null) {
       var message = new Array[Double](clique.size)
       for(i <- 0 until clique.size) {
-        /*var sum = 0.0
-        for(j <- 0 until clique.size) {
-          var mult = if(current.prev != null) messagesForward(current.index-1)(j) else 1
-          sum = logSumExp(Array(sum,current.log(j,i) + mult))
-        }*/
-        //message(i) = sum
         message(i) = logSumExp((0 until clique.size).map(j => current.log(j,i) + (if(current.prev != null) messagesForward(current.index-1)(j) else 1)).toArray)
       }
       messagesForward.append(message)
@@ -36,12 +30,6 @@ class LogSumProduct(chain : Chain) {
     while(current.prev != null) {
       var message = new Array[Double](clique.size)
       for(i <- 0 until clique.size) {
-        //var sum = 0.0
-        /*for(j <- 0 until clique.size) {
-          var mult = if(current.next != null) messagesBackward(chain.cliqueSize-current.index-2)(j) else 1
-          sum = logSumExp(Array(sum, current.log(i,j) + mult))
-        }*/
-        //message(i) = sum
         message(i) = logSumExp((0 until clique.size).map(j => current.log(i,j) + (if(current.next != null) messagesBackward(chain.cliqueSize-current.index-2)(j) else 1)).toArray)
       }
       messagesBackward.append(message)

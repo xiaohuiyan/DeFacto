@@ -8,7 +8,7 @@ class SumProduct(chain : Chain) {
 	//clique.print()
 	//chain.print()
 	
-	val beliefs = ArrayBuffer[Array[Double]]()
+	val beliefs = ArrayBuffer[Array[Array[Double]]]()
 	val messagesForward = ArrayBuffer[Array[Double]]()
 	val messagesBackward = ArrayBuffer[Array[Double]]()
 	var Z = 0.0
@@ -20,15 +20,14 @@ class SumProduct(chain : Chain) {
 			var message = new Array[Double](clique.size)
 			for(i <- 0 until clique.size) {
 				var sum = 0.0
-				for(j <- 0 until clique.size) {
+        for(j <- 0 until clique.size) {
 					var mult = if(current.prev != null) messagesForward(current.index-1)(j) else 1
-					//sum += (current(j+1,i+1) * mult)
-
+					sum += (current(j,i) * mult)
 				}
 				message(i) = sum
 			}
 			val messageSum = message.sum
-			for(i <- 0 until clique.size) message(i) /= messageSum
+			//for(i <- 0 until clique.size) message(i) /= messageSum
 			messagesForward.append(message)
 			last = current
 			current = current.next
@@ -41,12 +40,12 @@ class SumProduct(chain : Chain) {
 				var sum = 0.0
 				for(j <- 0 until clique.size) {
 					var mult = if(current.next != null) messagesBackward(chain.cliqueSize-current.index-2)(j) else 1
-					sum += (current(i+1,j+1) * mult)
+					sum += (current(i,j) * mult)
 				}
 				message(i) = sum
 			}
 			val messageSum = message.sum
-			for(i <- 0 until clique.size) message(i) /= messageSum
+			//for(i <- 0 until clique.size) message(i) /= messageSum
 			messagesBackward.append(message)
 			current = current.prev
 		} 
@@ -55,17 +54,12 @@ class SumProduct(chain : Chain) {
 	def computeBeliefs() {
 		var current : Clique = clique
 		while(current != null) {
-			var belief = new Array[Double](clique.size*clique.size)
-			for(i <- 1 to clique.size) {
-				for(j <- 1 to clique.size) {
-					var leftMult : Double = if(current.prev != null) messagesForward(current.index-1)(i-1) else 1
-					/*println(messagesBackward.size)
-					println(chain.cliqueSize-current.index-2)
-					println(messagesBackward(chain.cliqueSize-current.index-2))
-					println(messagesBackward(chain.cliqueSize-current.index-2).size)
-					println(j-1)*/
-					var rightMult : Double = if(current.next != null) messagesBackward(chain.cliqueSize-current.index-2)(j-1) else 1
-					belief( ((j-1)*clique.size) + (i-1) ) = (current(i,j) * leftMult * rightMult)
+			var belief = Array.ofDim[Double](clique.size,clique.size)
+			for(i <- 0 until clique.size) {
+				for(j <- 0 until clique.size) {
+					var leftMult : Double = if(current.prev != null) messagesForward(current.index-1)(i) else 1
+					var rightMult : Double = if(current.next != null) messagesBackward(chain.cliqueSize-current.index-2)(j) else 1
+					belief(i)(j) = (current(i,j) * leftMult * rightMult)
 				}
 			}
 			beliefs.append(belief)
@@ -77,7 +71,7 @@ class SumProduct(chain : Chain) {
 		computeMessages()
 		//printMessages()
 		computeBeliefs()
-		Z = beliefs(0).sum
+		Z = beliefs(0).flatten.sum
 		//printBeliefs()
 		//printZ()
     this
@@ -106,17 +100,17 @@ class SumProduct(chain : Chain) {
 		println(Z)
 	}
 	
-	def beliefValue(i : Int)(j : Int)(k : Int) = beliefs(i)(( (k-1)*clique.size) + (j-1))
+	def beliefValue(i : Int)(j : Int)(k : Int) = beliefs(i)(j)(k)
 	
 	def apply(i : Int) : Array[Double] = {
 		var marginals : ArrayBuffer[Double] = null
 		if(i < 1 || (i-1) > beliefs.size) { return Array[Double]() }
 		else if( (i-1) == beliefs.size ) { 
 			var idx = beliefs.size-1
-			var sum = 0.0
 			marginals = ArrayBuffer[Double]()
-			for(j <- 1 to clique.size) {
-				for(k <- 1 to clique.size) {
+			for(j <- 0 until clique.size) {
+        var sum = 0.0
+        for(k <- 0 until clique.size) {
 					sum += beliefValue(idx)(k)(j)
 				}
 				marginals.append(sum)
@@ -124,10 +118,10 @@ class SumProduct(chain : Chain) {
 	 	}
 		else {
 			var idx = if((i-1)==chain.cliqueSize) (chain.cliqueSize-1) else (i-1)
-			var sum = 0.0
 			marginals = ArrayBuffer[Double]()
-			for(j <- 1 to clique.size) {
-				for(k <- 1 to clique.size) {
+			for(j <- 0 until clique.size) {
+        var sum = 0.0
+        for(k <- 0 until clique.size) {
 					sum += beliefValue(idx)(j)(k)
 				}
 				marginals.append(sum)
@@ -142,7 +136,7 @@ class SumProduct(chain : Chain) {
 		if(i < 1 || (i-1) > chain.cliqueSize) return Array[Double]()
 		if(j-i!=1) return Array[Double]()
 		var idx = if((i-1)==chain.cliqueSize) (chain.cliqueSize-1) else (i-1)
-		beliefs(idx).map(_/Z)
+		beliefs(idx).flatten.map(_/Z)
 	}
 	
 	def setToMaxMarginal() {

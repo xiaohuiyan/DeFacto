@@ -8,7 +8,7 @@ import edu.umass.nlp.ml.sequence.{ForwardBackwards, Transition}
 import scala.collection.mutable.ArrayBuffer
 
 
-class LBFGSTrainer(val model : Model) {
+class LBFGSTrainer(val model : ChainModel) {
 
   def optimize() {
     val optimizerOpts = new LBFGSMinimizer.Opts()
@@ -30,14 +30,14 @@ class LBFGSTrainer(val model : Model) {
       for (chain <- datums) {
         println("data item: " + count)
         count += 1
-        val sp = new SumProduct(chain).inferUpDown()
+        val sp = new LogSumProduct(chain).inferUpDown()
         //  Obj Fn
         //  logLike += log P( correct-sequence | input)  =  sum( true-log-pots ) - logZ
         //  grad +=  (Empirical-Feat-Counts - Expected-Feat-Counts)
 
         // Objective Component
         logLike += chain.iterator.map( _.trueLog() ).sum // Sum the log potential value given the true labels and add to logLike
-        logLike -= math.log(sp.Z) // Subtract the log of Z from the log likelyhood
+        logLike -= sp.logZ // Subtract the log of Z from the log likelyhood
         // Graident Component
         // Empirical
         for (clique <- chain.iterator) {
@@ -45,7 +45,7 @@ class LBFGSTrainer(val model : Model) {
           for (i <- model.labelDomain.labels) {
             // Empirical State Feats
             for(f <- observationFactor.observation.features.zipWithIndex) {
-              val value = if(i==observationFactor.label.targetValue) 1 else 0.0
+              val value = if(i==observationFactor.label.targetValue) 1.0 else 0.0
               val featureIndex = f._2
               val klass = i-1
               val valueIndex = f._1-model.featuresDomain.features(f._2)(0)

@@ -11,19 +11,17 @@ class Clique(val size : Int, val i : Int) {
 	var next : Clique = null
 	var prev : Clique = null
 	
-	val table : Array[Double] = new Array[Double](size*size)
+	val table = Array.ofDim[Double](size,size)
 
-  val logTable : Array[Double] = new Array[Double](size*size)
+  val logTable = Array.ofDim[Double](size,size)
 
-  def decode(i : Int) : (Int, Int) = ( ( (i%size)+1 ), ( (i/size)+1 ) )
-	
-	def apply(yi : Int, yPlus : Int) : Double = table( ( (yPlus-1)*size) + (yi-1) )
-  def log(yi : Int, yPlus : Int) : Double = logTable( ( (yPlus-1)*size) + (yi-1) )
+	def apply(yi : Int, yPlus : Int) : Double = table(yi)(yPlus)
+  def log(yi : Int, yPlus : Int) : Double = logTable(yi)(yPlus)
 
   def trueLog() : Double = {
-    val yi = transFactor.left.targetValue
-    val yPlus = transFactor.right.targetValue
-    logTable( ( (yPlus-1)*size) + (yi-1) )
+    val yi = transFactor.left.targetValue - 1
+    val yPlus = transFactor.right.targetValue - 1
+    logTable(yi)(yPlus)
   }
 
   def compute() {
@@ -34,36 +32,34 @@ class Clique(val size : Int, val i : Int) {
 			case t:TransitionFactor => println(t)
 		}*/
 		var obsFactors = new Array[ObservationFactor](2)
-		for (factor <- factors)	if(factor.isInstanceOf[TransitionFactor]) transFactor = factor.asInstanceOf[TransitionFactor]
-		//println("TransFactor: " + transFactor)
-		for (factor <- factors) {
-			if(factor.isInstanceOf[ObservationFactor]) obsFactors(factor.asInstanceOf[ObservationFactor].index-transFactor.y) = factor.asInstanceOf[ObservationFactor]
-		}
-		for(i <- 0 until (size*size)) {
-			val idx = decode(i)
-			table(i) = transFactor(idx._1, idx._2)
+    for(factor <- factors) {
+      factor match {
+        case x : TransitionFactor => transFactor = factor.asInstanceOf[TransitionFactor]
+        case x : ObservationFactor => obsFactors(factor.asInstanceOf[ObservationFactor].index-transFactor.y) = factor.asInstanceOf[ObservationFactor]
+      }
+    }
+		for(i <- 0 until size; j <- 0 until size) {
+			table(i)(j) = transFactor(i, j)
 			//println("i: " + i)
 			//println("idx: " + idx)
 			
-			if(obsFactors(0) != null) table(i) *= obsFactors(0)(idx._1)
-			if(obsFactors(1) != null) table(i) *= obsFactors(1)(idx._2)
+			if(obsFactors(0) != null) table(i)(j) *= obsFactors(0)(i)
+			if(obsFactors(1) != null) table(i)(j) *= obsFactors(1)(j)
 		} 
 	}
 
   def logCompute() {
     var obsFactors = new Array[ObservationFactor](2)
-    for (factor <- factors)	if(factor.isInstanceOf[TransitionFactor]) transFactor = factor.asInstanceOf[TransitionFactor]
-    for (factor <- factors) {
-      if(factor.isInstanceOf[ObservationFactor]) obsFactors(factor.asInstanceOf[ObservationFactor].index-transFactor.y) = factor.asInstanceOf[ObservationFactor]
+    for(factor <- factors) {
+      factor match {
+        case x : TransitionFactor => transFactor = factor.asInstanceOf[TransitionFactor]
+        case x : ObservationFactor => obsFactors(factor.asInstanceOf[ObservationFactor].index-transFactor.y) = factor.asInstanceOf[ObservationFactor]
+      }
     }
-    for(i <- 0 until (size*size)) {
-      val idx = decode(i)
-      logTable(i) = transFactor.log(idx._1, idx._2)
-      //println("i: " + i)
-      //println("idx: " + idx)
-
-      if(obsFactors(0) != null) logTable(i) += obsFactors(0)(idx._1)
-      if(obsFactors(1) != null) logTable(i) += obsFactors(1)(idx._2)
+    for(i <- 0 until size; j <- 0 until size) {
+      logTable(i)(j) = transFactor.log(i, j)
+      if(obsFactors(0) != null) logTable(i)(j) += obsFactors(0).log(i)
+      if(obsFactors(1) != null) logTable(i)(j) += obsFactors(1).log(j)
     }
   }
 

@@ -95,4 +95,12 @@ class Chain(val weights : Weights, val ff : (String=>Array[Int])) extends Iterab
 			current = current.next
 		}
 	}
+
+  def logComputeCliques() {
+    var current : Clique = startClique
+    while(current != null) {
+      current.logCompute()
+      current = current.next
+    }
+  }
 } 
