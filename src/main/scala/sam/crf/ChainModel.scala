@@ -22,7 +22,7 @@ class ChainModel(domainFile : String, labelDomainSize : Int, ff : (String=>Array
 	def loadChains(dir : String) {
 		val files = recursiveListFiles(new File(dir))
     var count = 0
-		for(file <- files; if count < 30) {
+		for(file <- files) {
 			chains += new Chain(weights,ff).loadChain(file.getAbsolutePath())
       count += 1
     }

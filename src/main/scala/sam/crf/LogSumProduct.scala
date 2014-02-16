@@ -161,9 +161,12 @@ class LogSumProduct(chain : Chain) {
     if (xs.length == 1) return xs(0);
     val max = xs.max
     var sum = 0.0
-    for (i <- 0 until xs.length) {
+    val until = xs.length
+    var i = 0
+    while(i < until) {
       if (xs(i) != Double.NegativeInfinity)
         sum += math.exp(xs(i) - max)
+      i += 1
     }
     max + math.log(sum)
   }

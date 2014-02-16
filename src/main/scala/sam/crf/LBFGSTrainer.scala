@@ -26,7 +26,7 @@ class LBFGSTrainer(val model : ChainModel) {
       val grad = new Array[Double](model.weights.dimension)
       var count = 0
       println(s"Running on ${datums.size} amount of data.")
-      println(s"Dimention is= ${grad.size}")
+      println(s"Dimension is= ${grad.size}")
       for (chain <- datums) {
         println("data item: " + count)
         count += 1
@@ -63,26 +63,27 @@ class LBFGSTrainer(val model : ChainModel) {
         }
         // Expected
         for (clique <- chain.iterator) {
+          val index = clique.index+1
+          val s = sp(index)
+          val trans = sp(clique.i, clique.i+1)
           for (i <- model.labelDomain.labels) {
             val observationFactor = clique.factors.filter(_.isInstanceOf[ObservationFactor]).map(_.asInstanceOf[ObservationFactor]).head
             // Node
             for (f <- observationFactor.observation.features.zipWithIndex) {
               for(fv <- model.featuresDomain.features(f._2).zipWithIndex) {
-                val index = clique.index+1
-                val s = sp(index)
                 val spIndex = i-1
                 val gradI = f._2*(i-1)+fv._2
                 val featureIndex = f._2
                 val klass = i-1
                 val valueIndex = fv._2
-                if(f._1==fv._1)  grad(model.weights.index(featureIndex,klass,valueIndex)) -=  sp(index)(spIndex)
-                if(sp(index)(spIndex).isNaN)
+                if(f._1==fv._1)  grad(model.weights.index(featureIndex,klass,valueIndex)) -=  s(spIndex)
+                if(s(spIndex).isNaN)
                   println("NaN")
               }
             }
             // Transition
             for (j <- model.labelDomain.labels) {
-              grad(model.labelDomain.until*(j-1)+(i-1) + model.weights.obsWeightsSize) -= sp(clique.i, clique.i+1)(i+j)
+              grad(model.labelDomain.until*(j-1)+(i-1) + model.weights.obsWeightsSize) -= trans(i+j)
             }
           }
         }
