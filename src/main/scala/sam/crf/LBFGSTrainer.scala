@@ -10,6 +10,9 @@ import scala.collection.mutable.ArrayBuffer
 
 class LBFGSTrainer(val model : ChainModel, trainData : Array[Chain], testData : Array[Chain]) {
 
+  val emperical = new Array[Double](model.weights.dimension)
+  var calculatedEmperical = false
+
   def optimize() {
     val optimizerOpts = new LBFGSMinimizer.Opts()
     val fn = new CachingDifferentiableFn(new ObjFn(trainData))
@@ -30,70 +33,64 @@ class LBFGSTrainer(val model : ChainModel, trainData : Array[Chain], testData : 
 
   class ObjFn(val data : Array[Chain]) extends IDifferentiableFn {
 
-    def compute(datums : Iterable[Chain]) : IPair[java.lang.Double, Array[Double]] =  {
-      var logLike = 0.0
-      val grad = new Array[Double](model.weights.dimension)
-      var count = 0
+    def calcEmperical(datums : Iterable[Chain]) {
       for (chain <- datums) {
-        //println("data item: " + count)
-        count += 1
-        val sp = new LogSumProduct(chain).inferUpDown()
-        //  Obj Fn
-        //  logLike += log P( correct-sequence | input)  =  sum( true-log-pots ) - logZ
-        //  grad +=  (Empirical-Feat-Counts - Expected-Feat-Counts)
-
-        // Objective Component
-        logLike += chain.iterator.map( _.trueLog() ).sum // Sum the log potential value given the true labels and add to logLike
-        logLike -= sp.logZ // Subtract the log of Z from the log likelyhood
-        // Graident Component
+        chain.makeCliqueTree()
         // Empirical
         for (clique <- chain.iterator) {
           val observationFactor = clique.factors.filter(_.isInstanceOf[ObservationFactor]).map(_.asInstanceOf[ObservationFactor]).head
-          //for (i <- model.labelDomain.labels) {
-            // Empirical State Feats
-            for(f <- observationFactor.observation.features.zipWithIndex) {
-              //val value = if(i==observationFactor.label.targetValue) 1.0 else 0.0
-              val featureIndex = f._2
-              val klass = observationFactor.label.targetValue-1
-              val valueIndex = f._1-model.featuresDomain.features(f._2)(0)
-              //println(s"Index: ${model.weights.index(featureIndex,klass,valueIndex)}")
-              grad(model.weights.index(featureIndex,klass,valueIndex)) += 1
-            }
-            // Empirical Trans Feat
-            //for(j <- model.labelDomain.labels) {
-              val i = observationFactor.label.targetValue
-              val secondFactor = if(clique.next != null) clique.next.factors.filter(_.isInstanceOf[ObservationFactor]).map(_.asInstanceOf[ObservationFactor]).head else clique.factors.filter(_.isInstanceOf[ObservationFactor]).map(_.asInstanceOf[ObservationFactor]).last
-              val j = secondFactor.label.targetValue
-              grad(model.weights.transIndex(i-1,j-1)) += 1.0
-              //println("Index: " + (model.labelDomain.until*(i-1)+(j-1) + model.weights.obsWeightsSize))
-            //}
-          //}
+          for(f <- observationFactor.observation.features.zipWithIndex) {
+            val featureIndex = f._2
+            val klass = observationFactor.label.targetValue-1
+            val valueIndex = f._1-model.featuresDomain.features(f._2)(0)
+            emperical(model.weights.index(featureIndex,klass,valueIndex)) += 1
+          }
+          val i = observationFactor.label.targetValue
+          val secondFactor = if(clique.next != null) clique.next.factors.filter(_.isInstanceOf[ObservationFactor]).map(_.asInstanceOf[ObservationFactor]).head else clique.factors.filter(_.isInstanceOf[ObservationFactor]).map(_.asInstanceOf[ObservationFactor]).last
+          val j = secondFactor.label.targetValue
+          emperical(model.weights.transIndex(i-1,j-1)) += 1.0
         }
+      }
+      calculatedEmperical = true
+    }
+
+    def compute(datums : Iterable[Chain]) : IPair[java.lang.Double, Array[Double]] =  {
+      var logLike = 0.0
+      val grad = new Array[Double](model.weights.dimension)
+      //  Obj Fn
+      //  logLike += log P( correct-sequence | input)  =  sum( true-log-pots ) - logZ
+      //  grad +=  (Empirical-Feat-Counts - Expected-Feat-Counts)
+      if(!calculatedEmperical)
+        calcEmperical(datums)
+
+      for(i <- 0 until grad.length)
+          grad(i) = emperical(i)
         // Expected
-        for (clique <- chain.iterator) {
+        for(chain <- datums) {
+          val sp = new LogSumProduct(chain).inferUpDown()
+          logLike += chain.iterator.map( _.trueLog() ).sum // Sum the log potential value given the true labels and add to logLike
+          logLike -= sp.logZ // Subtract the log of Z from the log likelyhood
+          for (clique <- chain.iterator) {
           val index = clique.index+1
           val s = sp(index)
           val trans = sp(clique.i, clique.i+1)
           for (i <- model.labelDomain.labels) {
             val observationFactor = clique.factors.filter(_.isInstanceOf[ObservationFactor]).map(_.asInstanceOf[ObservationFactor]).head
             // Node
-            for (f <- observationFactor.observation.features.zipWithIndex) {
-              for(fv <- model.featuresDomain.features(f._2).zipWithIndex) {
-                val spIndex = i-1
-                val gradI = f._2*(i-1)+fv._2
-                val featureIndex = f._2
-                val klass = i-1
-                val valueIndex = fv._2
-                if(f._1==fv._1)  grad(model.weights.index(featureIndex,klass,valueIndex)) -=  s(spIndex)
-                if(s(spIndex).isNaN)
-                    println("NaN")
-              }
+            var count = 0
+            for (f <- observationFactor.observation.features) {
+              val spIndex = i-1
+              val featureIndex = count
+              val klass = i-1
+              val valueIndex = model.featuresDomain.features(count).indexOf(f)
+              grad(model.weights.index(featureIndex,klass,valueIndex)) -=  s(spIndex)
+              count += 1
             }
             // Transition
             for (j <- model.labelDomain.labels) {
               val iIndex = i-1
               val jIndex = j-1
-              val index = iIndex*model.labelDomain.until + jIndex
+              val index = iIndex*model.labelDomain.until+jIndex
               grad(model.weights.transIndex(i-1,j-1)) -= trans(index)
             }
           }

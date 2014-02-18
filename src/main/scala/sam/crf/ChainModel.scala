@@ -25,7 +25,7 @@ class ChainModel(domainFile : String, labelDomainSize : Int, ff : (String=>Array
     val arraybuffer = new ArrayBuffer[Chain]()
 		val files = recursiveListFiles(new File(dir))
     var count = 0
-		for(file <- files; if filter(file.getAbsolutePath) && count < 60) {
+		for(file <- files; if filter(file.getAbsolutePath)) {
       arraybuffer += new Chain(weights,ff).loadChain(file.getAbsolutePath())
       count += 1
     }

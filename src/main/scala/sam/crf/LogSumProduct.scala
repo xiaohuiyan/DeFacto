@@ -2,7 +2,7 @@ package sam.crf
 
 import scala.collection.mutable.ArrayBuffer
 class LogSumProduct(chain : Chain) {
-  chain.makeCliqueTree()
+  if(chain.cliqueSize == 0) chain.makeCliqueTree()
   chain.logComputeCliques()
   val clique = chain.startClique
 
@@ -15,7 +15,7 @@ class LogSumProduct(chain : Chain) {
     var current : Clique = clique
     var last : Clique = clique
     while(current.next != null) {
-      var message = new Array[Double](clique.size)
+      val message = new Array[Double](clique.size)
       for(i <- 0 until clique.size) {
         message(i) = logSumExp((0 until clique.size).map(j => current.log(j,i) + (if(current.prev != null) messagesForward(current.index-1)(j) else 1)).toArray)
       }
@@ -84,29 +84,23 @@ class LogSumProduct(chain : Chain) {
   def beliefValue(i : Int)(j : Int)(k : Int) = beliefs(i)(j)(k)
 
   def apply(i : Int) : Array[Double] = {
-    var marginals : ArrayBuffer[Double] = null
+    var marginals : IndexedSeq[Double] = null
     if(i < 1 || (i-1) > beliefs.size) { return Array[Double]() }
     else if( (i-1) == beliefs.size ) {
       val idx = beliefs.size-1
-      marginals = ArrayBuffer[Double]()
-      for(j <- 0 until clique.size)
-        marginals.append(logSumExp(beliefs(idx).map(b => b(j))))
+      marginals = (0 until clique.size).map( j => logSumExp(beliefs(idx).map(b => b(j))))
     }
     else {
-      var idx = if((i-1)==chain.cliqueSize) (chain.cliqueSize-1) else (i-1)
-      marginals = ArrayBuffer[Double]()
-      for(j <- 0 until clique.size)
-        marginals.append(logSumExp(beliefs(idx)(j)))
+      val idx = if((i-1)==chain.cliqueSize) chain.cliqueSize-1 else i-1
+      marginals = (0 until clique.size).map( j=> logSumExp(beliefs(idx)(j)))
     }
-    if(marginals.head.isNaN || logZ.isNaN)
-      println("NaN")
     marginals.toArray.map(b => math.exp(b - logZ))
   }
 
   def apply(i : Int, j : Int) : Array[Double] = {
     if(i < 1 || (i-1) > chain.cliqueSize) return Array[Double]()
     if(j-i!=1) return Array[Double]()
-    var idx = if((i-1)==chain.cliqueSize) (chain.cliqueSize-1) else (i-1)
+    val idx = if((i-1)==chain.cliqueSize) chain.cliqueSize-1 else i-1
     beliefs(idx).flatten.map(b => math.exp(b - logZ))
   }
 
