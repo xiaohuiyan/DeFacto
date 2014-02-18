@@ -13,6 +13,22 @@ class Chain(val weights : Weights, val ff : (String=>Array[Int])) extends Iterab
     def hasNext = current != null
   }
 
+  def labelIterator = new Iterator[Label] {
+    var firstHasNext = 0
+    val cliqueIterator = iterator
+    var current : Clique = null
+    def next() = {
+    if(firstHasNext == 1) {
+      firstHasNext += 1
+      current.transFactor.right
+    } else {
+      current = cliqueIterator.next()
+      if(!cliqueIterator.hasNext) firstHasNext += 1
+      current.transFactor.left
+    }}
+    def hasNext = iterator.hasNext && firstHasNext < 2
+  }
+
 	// Load chain takes in a sentence file and compiles a CRF chain
 	def loadChain(file : String) : Chain = {
 		var prev : Label = null

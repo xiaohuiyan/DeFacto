@@ -14,8 +14,11 @@ class LBFGSTrainer(val model : ChainModel) {
     val optimizerOpts = new LBFGSMinimizer.Opts()
     val fn = new CachingDifferentiableFn(new ObjFn(model.chains))
     val optimizer = new LBFGSMinimizer()
+    println(s"Running on ${model.chains.size} amount of data.")
+    println(s"Dimension is= ${model.weights.dimension}")
     val optRes = optimizer.minimize(fn, model.weights.getWeights, optimizerOpts)
-    model.weights.setWeights(optRes.minArg)
+    val optRes2 = optimizer.minimize(fn, model.weights.getWeights, optimizerOpts)
+    model.weights.setWeights(optRes2.minArg)
   }
 
 
@@ -25,10 +28,8 @@ class LBFGSTrainer(val model : ChainModel) {
       var logLike = 0.0
       val grad = new Array[Double](model.weights.dimension)
       var count = 0
-      println(s"Running on ${datums.size} amount of data.")
-      println(s"Dimension is= ${grad.size}")
       for (chain <- datums) {
-        println("data item: " + count)
+        //println("data item: " + count)
         count += 1
         val sp = new LogSumProduct(chain).inferUpDown()
         //  Obj Fn
@@ -56,7 +57,7 @@ class LBFGSTrainer(val model : ChainModel) {
             for(j <- model.labelDomain.labels) {
               val secondFactor = if(clique.next != null) clique.next.factors.filter(_.isInstanceOf[ObservationFactor]).map(_.asInstanceOf[ObservationFactor]).head else clique.factors.filter(_.isInstanceOf[ObservationFactor]).map(_.asInstanceOf[ObservationFactor]).last
               val value = if(observationFactor.label.targetValue==i && secondFactor.label.targetValue==j) 1.0 else 0.0
-              grad(model.labelDomain.until*(j-1)+(i-1) + model.weights.obsWeightsSize) += value
+              grad(model.weights.transIndex(i-1,j-1)) += value
               //println("Index: " + (model.labelDomain.until*(i-1)+(j-1) + model.weights.obsWeightsSize))
             }
           }
@@ -78,12 +79,15 @@ class LBFGSTrainer(val model : ChainModel) {
                 val valueIndex = fv._2
                 if(f._1==fv._1)  grad(model.weights.index(featureIndex,klass,valueIndex)) -=  s(spIndex)
                 if(s(spIndex).isNaN)
-                  println("NaN")
+                    println("NaN")
               }
             }
             // Transition
             for (j <- model.labelDomain.labels) {
-              grad(model.labelDomain.until*(j-1)+(i-1) + model.weights.obsWeightsSize) -= trans(i+j)
+              val iIndex = i-1
+              val jIndex = j-1
+              val index = iIndex*model.labelDomain.until + jIndex
+              grad(model.weights.transIndex(i-1,j-1)) -= trans(index)
             }
           }
         }
@@ -104,11 +108,10 @@ class LBFGSTrainer(val model : ChainModel) {
       logLike *= -1.0;
       grad = grad.map( _ * -1.0)
 
-            println("Num Feats: " + x.length);
+            println("Train Accuracy:" + model.evaluate)
             println("Grad: " + (grad).mkString(", "))
             println("Weights: " + x.mkString(", "))
             println("Value: " + logLike)
-            println("Done with Computing Objective");
 
       BasicPair.make(logLike, grad)
     }

@@ -5,8 +5,6 @@ class LogSumProduct(chain : Chain) {
   chain.makeCliqueTree()
   chain.logComputeCliques()
   val clique = chain.startClique
-  //clique.print()
-  //chain.print()
 
   val beliefs = ArrayBuffer[Array[Array[Double]]]()
   val messagesForward = ArrayBuffer[Array[Double]]()
@@ -55,11 +53,8 @@ class LogSumProduct(chain : Chain) {
 
   def inferUpDown() : LogSumProduct = {
     computeMessages()
-    //printMessages()
     computeBeliefs()
     logZ = logSumExp(beliefs(0).flatten)
-    //printBeliefs()
-    //printZ()
     this
   }
 
@@ -92,26 +87,16 @@ class LogSumProduct(chain : Chain) {
     var marginals : ArrayBuffer[Double] = null
     if(i < 1 || (i-1) > beliefs.size) { return Array[Double]() }
     else if( (i-1) == beliefs.size ) {
-      var idx = beliefs.size-1
+      val idx = beliefs.size-1
       marginals = ArrayBuffer[Double]()
-      for(j <- 0 until clique.size) {
-        var sum = 0.0
-        for(k <- 0 until clique.size) {
-          sum = logSumExp(Array(sum,beliefValue(idx)(k)(j)))
-        }
-        marginals.append(sum)
-      }
+      for(j <- 0 until clique.size)
+        marginals.append(logSumExp(beliefs(idx).map(b => b(j))))
     }
     else {
       var idx = if((i-1)==chain.cliqueSize) (chain.cliqueSize-1) else (i-1)
       marginals = ArrayBuffer[Double]()
-      for(j <- 0 until clique.size) {
-        var sum = 0.0
-        for(k <- 0 until clique.size) {
-          sum = logSumExp(Array(sum,beliefValue(idx)(j)(k)))
-        }
-        marginals.append(sum)
-      }
+      for(j <- 0 until clique.size)
+        marginals.append(logSumExp(beliefs(idx)(j)))
     }
     if(marginals.head.isNaN || logZ.isNaN)
       println("NaN")

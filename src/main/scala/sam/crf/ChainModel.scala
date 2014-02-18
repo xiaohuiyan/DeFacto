@@ -22,7 +22,7 @@ class ChainModel(domainFile : String, labelDomainSize : Int, ff : (String=>Array
 	def loadChains(dir : String) {
 		val files = recursiveListFiles(new File(dir))
     var count = 0
-		for(file <- files) {
+		for(file <- files; if count < 60) {
 			chains += new Chain(weights,ff).loadChain(file.getAbsolutePath())
       count += 1
     }
@@ -58,10 +58,6 @@ class ChainModel(domainFile : String, labelDomainSize : Int, ff : (String=>Array
 	}
 	
 	def test(dir : String) {
-    val gw = weights.getWeights
-    weights.setWeights(gw)
-    val gw2 = weights.getWeights
-    assert((0 until gw.length).forall(i => gw(i) == gw2(i)), "Weights change by setting.")
 		loadChains(dir)
     datasetSize = chains.length
     for(chain <- chains) {
@@ -73,6 +69,22 @@ class ChainModel(domainFile : String, labelDomainSize : Int, ff : (String=>Array
       println("")
 		}
 	}
+
+  def evaluate : Double = {
+    var correct = 0
+    var total = 0
+    for(chain <- chains) {
+      val sp = new LogSumProduct(chain)
+      sp.inferUpDown()
+      sp.setToMaxMarginal()
+      for(label <- chain.labelIterator) {
+        total += 1
+        if(label.value == label.targetValue) correct += 1
+      }
+    }
+    correct.toDouble / total
+  }
+
 
   def train(dir : String) {
     loadChains(dir)

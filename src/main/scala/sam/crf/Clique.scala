@@ -25,12 +25,6 @@ class Clique(val size : Int, val i : Int) {
   }
 
   def compute() {
-		//println("Clique " + index + " id " + this)
-		/*println("size: " + factors.size)
-		for(factor <- factors) factor match {
-			case o:ObservationFactor => println(o)
-			case t:TransitionFactor => println(t)
-		}*/
 		var obsFactors = new Array[ObservationFactor](2)
     for(factor <- factors) {
       factor match {
@@ -40,9 +34,6 @@ class Clique(val size : Int, val i : Int) {
     }
 		for(i <- 0 until size; j <- 0 until size) {
 			table(i)(j) = transFactor(i, j)
-			//println("i: " + i)
-			//println("idx: " + idx)
-			
 			if(obsFactors(0) != null) table(i)(j) *= obsFactors(0)(i)
 			if(obsFactors(1) != null) table(i)(j) *= obsFactors(1)(j)
 		} 
