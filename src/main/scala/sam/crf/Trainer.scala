@@ -12,7 +12,9 @@ object Trainer {
     val model = new ChainModel(args(0), args(1).toInt, extractFeatures)
     //model.weights.index(4,0,10)
     //model.weights.index(0,3,0)
-    model.train(args(2))
+    val trainData = model.loadChains(args(2), {a : String => a.contains("train")})
+    val testData = model.loadChains(args(2), {a : String => a.contains("test")})
+    model.train(trainData, testData)
     model.saveWeights(args(3))
   }
 }

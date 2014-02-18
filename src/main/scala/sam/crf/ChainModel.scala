@@ -3,6 +3,8 @@ package sam.crf
 import scala.io.Source
 import scala.collection.mutable.ArrayBuffer
 import java.io.File
+import sam.crf.Chain
+
 class ChainModel(domainFile : String, labelDomainSize : Int, ff : (String=>Array[Int])) {
   
   val featuresDomain = new FeaturesDomain(domainFile)
@@ -19,13 +21,15 @@ class ChainModel(domainFile : String, labelDomainSize : Int, ff : (String=>Array
 	  else these
 	}
 	
-	def loadChains(dir : String) {
+	def loadChains(dir : String, filter : String => Boolean = {a : String => true}) : Array[Chain] = {
+    val arraybuffer = new ArrayBuffer[Chain]()
 		val files = recursiveListFiles(new File(dir))
     var count = 0
-		for(file <- files; if count < 60) {
-			chains += new Chain(weights,ff).loadChain(file.getAbsolutePath())
+		for(file <- files; if filter(file.getAbsolutePath) && count < 60) {
+      arraybuffer += new Chain(weights,ff).loadChain(file.getAbsolutePath())
       count += 1
     }
+    arraybuffer.toArray
 	}
 
   def loadChainsTrain(dir : String) {
@@ -57,10 +61,8 @@ class ChainModel(domainFile : String, labelDomainSize : Int, ff : (String=>Array
 		}
 	}
 	
-	def test(dir : String) {
-		loadChains(dir)
-    datasetSize = chains.length
-    for(chain <- chains) {
+	def test(testChains : Array[Chain]) {
+    for(chain <- testChains) {
 			val sp = new LogSumProduct(chain)
 			sp.inferUpDown()
 			sp.setToMaxMarginal()
@@ -69,6 +71,22 @@ class ChainModel(domainFile : String, labelDomainSize : Int, ff : (String=>Array
       println("")
 		}
 	}
+
+  def evaluate(testChains : Array[Chain]) : Double = {
+    var correct = 0
+    var total = 0
+    for(chain <- testChains) {
+      val sp = new LogSumProduct(chain)
+      sp.inferUpDown()
+      sp.setToMaxMarginal()
+      for(label <- chain.labelIterator) {
+        total += 1
+        if(label.value == label.targetValue) correct += 1
+      }
+    }
+    correct.toDouble / total
+  }
+
 
   def evaluate : Double = {
     var correct = 0
@@ -86,10 +104,10 @@ class ChainModel(domainFile : String, labelDomainSize : Int, ff : (String=>Array
   }
 
 
-  def train(dir : String) {
-    loadChains(dir)
-    datasetSize = chains.length
-    val trainer = new LBFGSTrainer(this)
+  def train(train : Array[Chain], test : Array[Chain]) {
+    //loadChains(dir)
+    //datasetSize = chains.length
+    val trainer = new LBFGSTrainer(this, train, test)
     trainer.optimize()
   }
 
