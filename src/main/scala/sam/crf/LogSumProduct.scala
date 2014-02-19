@@ -97,11 +97,11 @@ class LogSumProduct(chain : Chain) {
     marginals.toArray.map(b => math.exp(b - logZ))
   }
 
-  def apply(i : Int, j : Int) : Array[Double] = {
-    if(i < 1 || (i-1) > chain.cliqueSize) return Array[Double]()
-    if(j-i!=1) return Array[Double]()
+  def apply(i : Int, j : Int) : Option[Array[Array[Double]]] = {
+    if(i < 1 || (i-1) > chain.cliqueSize) return None
+    if(j-i!=1) return None
     val idx = if((i-1)==chain.cliqueSize) chain.cliqueSize-1 else i-1
-    beliefs(idx).flatten.map(b => math.exp(b - logZ))
+    Some(beliefs(idx).map(b => b.map(c => math.exp(c - logZ))))
   }
 
   def setToMaxMarginal() {

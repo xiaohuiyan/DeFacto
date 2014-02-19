@@ -8,7 +8,9 @@ class Clique(val size : Int, val i : Int) {
 		factors = List(factor) ::: factors
 	}
 	var transFactor : TransitionFactor = null
-	var next : Clique = null
+  var observationFactors = new ArrayBuffer[ObservationFactor]()
+
+  var next : Clique = null
 	var prev : Clique = null
 	
 	val table = Array.ofDim[Double](size,size)
@@ -36,7 +38,7 @@ class Clique(val size : Int, val i : Int) {
 			table(i)(j) = transFactor(i, j)
 			if(obsFactors(0) != null) table(i)(j) *= obsFactors(0)(i)
 			if(obsFactors(1) != null) table(i)(j) *= obsFactors(1)(j)
-		} 
+		}
 	}
 
   def logCompute() {
@@ -47,6 +49,8 @@ class Clique(val size : Int, val i : Int) {
         case x : ObservationFactor => obsFactors(factor.asInstanceOf[ObservationFactor].index-transFactor.y) = factor.asInstanceOf[ObservationFactor]
       }
     }
+    if(obsFactors(0) != null && observationFactors.length == 0) observationFactors += obsFactors(0)
+    if(obsFactors(1) != null && observationFactors.length == 1) observationFactors += obsFactors(1)
     for(i <- 0 until size; j <- 0 until size) {
       logTable(i)(j) = transFactor.log(i, j)
       if(obsFactors(0) != null) logTable(i)(j) += obsFactors(0).log(i)

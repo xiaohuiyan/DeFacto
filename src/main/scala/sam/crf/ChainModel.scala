@@ -4,6 +4,7 @@ import scala.io.Source
 import scala.collection.mutable.ArrayBuffer
 import java.io.File
 import sam.crf.Chain
+import scala.collection.mutable
 
 class ChainModel(domainFile : String, labelDomainSize : Int, ff : (String=>Array[Int])) {
   
@@ -52,7 +53,7 @@ class ChainModel(domainFile : String, labelDomainSize : Int, ff : (String=>Array
 		val lines = Source.fromFile(file).getLines().toArray
 		var count = 0
 		for(f <-  0 until featuresDomain.features.size) {
-			for(v <- 0 until (featuresDomain.features(f).size) ) {
+			for(v <- 0 until featuresDomain.features(f).size ) {
         for(k <- 0 until labelDomain.until) {
 				  weights.obsWeights(f)(v)(k) = lines(count).toDouble
 				  count += 1
@@ -105,10 +106,7 @@ class ChainModel(domainFile : String, labelDomainSize : Int, ff : (String=>Array
 
 
   def train(train : Array[Chain], test : Array[Chain]) {
-    //loadChains(dir)
-    //datasetSize = chains.length
-    val trainer = new LBFGSTrainer(this, train, test)
-    trainer.optimize()
+    new LBFGSTrainer(this, train, test).optimize()
   }
 
   def saveWeights(dir : String) {
@@ -123,11 +121,15 @@ class FeaturesDomain(val file : String) {
 		var split = line.split("->")
 		features.append((split(0).toInt to split(1).toInt).toArray)
 	}
+  def featureIndex(featureIndex : Int, value : Int) : Int = {
+    val start = features(featureIndex).head
+    value - start
+  }
 	def size = features.size
 }
 
 class LabelDomain(val until : Int) {
-	var labels = 1 to until
+	var labels = (1 to until).toArray
 }
 
 class Weights(val features : FeaturesDomain, val labels : LabelDomain) {
@@ -171,9 +173,10 @@ class Weights(val features : FeaturesDomain, val labels : LabelDomain) {
 	  obsWeights(feature)(value-features.features(feature)(0))(klass)
   }
 
+
   def index(feature : Int, klass : Int, value : Int) : Int = {
-    val featureCount = obsWeights.take(feature).map(_.length).sum * labels.until
-    featureCount + value*labels.until + klass
+      val featureCount = obsWeights.take(feature).map(_.length).sum * labels.until
+      featureCount + value*labels.until + klass
   }
 
   def transIndex(klass1 : Int, klass2 : Int) : Int = {
