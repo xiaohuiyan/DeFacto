@@ -106,7 +106,7 @@ class ChainModel(domainFile : String, labelDomainSize : Int, ff : (String=>Array
 
 
   def train(train : Array[Chain], test : Array[Chain]) {
-    new LBFGSTrainer(this, train, test).optimize()
+    (new LBFGSTrainer(this, train, test) with L2Regularization).optimize()
   }
 
   def saveWeights(dir : String) {

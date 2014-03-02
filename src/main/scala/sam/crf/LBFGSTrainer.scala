@@ -8,7 +8,7 @@ import edu.umass.nlp.ml.sequence.{ForwardBackwards, Transition}
 import scala.collection.mutable.ArrayBuffer
 
 
-class LBFGSTrainer(val model : ChainModel, trainData : Array[Chain], testData : Array[Chain]) {
+abstract class LBFGSTrainer(val model : ChainModel, trainData : Array[Chain], testData : Array[Chain]) {
 
   val empirical = new Array[Double](model.weights.dimension)
   var calculatedEmpirical = false
@@ -25,6 +25,9 @@ class LBFGSTrainer(val model : ChainModel, trainData : Array[Chain], testData : 
     model.weights.setWeights(optRes.minArg)
   }
 
+  def regularizationLikelihood(weights : Weights) : Double
+
+  def regularizationGradient(weights : Weights) : Array[Double]
 
   class ObjFn(val data : Array[Chain]) extends IDifferentiableFn {
 
@@ -59,7 +62,7 @@ class LBFGSTrainer(val model : ChainModel, trainData : Array[Chain], testData : 
         for(chain <- datums) {
           val sumProduct = new LogSumProduct(chain).inferUpDown()
           logLike += chain.iterator.map( _.trueLog() ).sum // Sum the log potential value given the true labels and add to logLike
-          logLike -= sumProduct.logZ // Subtract the log of Z from the log likelyhood
+          logLike -= sumProduct.logZ // Subtract the log of Z from the log likelihood
           for (clique <- chain.iterator) {
           val index = clique.index+1
           val s = sumProduct(index)
@@ -87,7 +90,14 @@ class LBFGSTrainer(val model : ChainModel, trainData : Array[Chain], testData : 
           }
         }
       }
-      BasicPair.make(logLike, grad);
+      logLike -= regularizationLikelihood(model.weights)
+      val rg = regularizationGradient(model.weights)
+      var c = 0
+      while(c < grad.length) {
+        grad(c) -= rg(c)
+        c += 1
+      }
+      BasicPair.make(logLike, grad)
     }
 
     def computeAt(x : Array[Double]) : IPair[java.lang.Double, Array[Double]] = {
