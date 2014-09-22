@@ -16,7 +16,7 @@ object Part1 {
 		model.setTransitionWeights(args(4))
 		model.setObservationWeights(args(5))
     //model.train(new SampleRankTrainer)
-		model.test(args(3))
+		model.test(model.loadChains(args(3)))
     println("Accuracy: " + model.evaluate)
 	}	
 }

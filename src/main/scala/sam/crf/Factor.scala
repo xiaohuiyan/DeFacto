@@ -19,6 +19,11 @@ class ObservationFactor(val observation : Observation, val label : Label, weight
     sum
   }
 
+  def trueLog() : Double = {
+    var klass = label.targetValue
+    log(klass)
+  }
+
 }
 class TransitionFactor(val left : Label, val right : Label, weights : Weights) extends Factor(weights) {
 	left.rightFactor = this

@@ -45,8 +45,17 @@ class Chain(val weights : Weights, val ff : (String=>Array[Int])) extends Iterab
 		end = prev
 		this
 	}
-	
-	def print() {
+
+  def loadClassifierChain(line : String) : Chain = {
+    val split = line.split(",")
+    val obs = new Observation(0, split(1), ff(line))
+    val lab = new Label(0, split(0))
+    new ObservationFactor(obs, lab, weights)
+    end = lab
+    this
+  }
+
+  def print() {
 		var leftFactor : TransitionFactor = end.leftFactor
 		while(leftFactor != null) {
 			println("Factor: " + leftFactor.y)
@@ -72,6 +81,12 @@ class Chain(val weights : Weights, val ff : (String=>Array[Int])) extends Iterab
 		}
 		
 	}
+
+  def singleClique(): Unit = {
+    startClique = new Clique(weights.labels.until, 0)
+    cliqueSize = 1
+    startClique.addFactor(end.observationFactor)
+  }
 	
 	def makeCliqueTree() {
 		var pointer = end.leftFactor
