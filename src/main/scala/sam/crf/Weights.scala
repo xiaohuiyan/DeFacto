@@ -111,12 +111,15 @@ class LabelDomain extends Domain[String] {
 abstract class Vector extends Seq[Double] {
   def +=(o : Vector): Unit = {
     assert(o.length == this.length, "Vector lengths must match for addition")
-    (0 until length).map( i => this(i) += o(i) )
+    (0 until length).map( i => this.add(i,o(i)) )
   }
 
   def +=(inc : Double) : Unit = {
-    (0 until length).map( i=> this(i) += inc)
+    (0 until length).map( i=> this.add(i,inc))
   }
+
+  def add(i : Int, v : Double) : Unit
+  def mult(i : Int, v : Double) : Unit
 
   def dot(o : Vector) : Double = {
     assert(o.length == this.length, "Vector length must match for dot product")
@@ -125,12 +128,16 @@ abstract class Vector extends Seq[Double] {
 
   def *=(o : Vector) : Unit = {
     assert(o.length == this.length, "Vector lengths must match for addition")
-    (0 until length).map( i => this(i) *= o(i))
+    (0 until length).map( i => this.mult(i,o(i)))
   }
 
   def *=(inc : Double) : Unit = {
-    (0 until length).map( i=> this(i) *= inc)
+    (0 until length).map( i=> this.mult(i, inc))
   }
+
+  def activeElements : Seq[(Int,Double)]
+  def activeLength : Int
+
 }
 
 abstract class Vector1(val dim1 : Int)
@@ -139,8 +146,17 @@ class DenseVector1(dim1 : Int) extends Vector1(dim1) {
   val elements = new Array[Double](dim1)
 
   def length : Int = elements.length
+  def activeLength : Int = elements.length
 
   def apply(i : Int) = elements(i)
+
+  def add(i : Int, v : Double) : Unit = {
+    elements(i) += v
+  }
+
+  def mult(i : Int, v : Double) : Unit = {
+    elements(i) *= v
+  }
 
   def update(i : Int, v : Double) : Unit = {
     elements(i) = v
@@ -148,6 +164,18 @@ class DenseVector1(dim1 : Int) extends Vector1(dim1) {
 
   def iterator : Iterator[Double] = {
     elements.toIterator
+  }
+
+  def toSparse : SparseVector1 = {
+    val o = new SparseVector1(dim1)
+    for(i <- 0 until length) {
+      if(this(i) != 0.0) o(i) = this(i)
+    }
+    o
+  }
+
+  def activeElements : Seq[(Int,Double)] = {
+    (0 until length).zip(elements)
   }
 }
 
@@ -159,6 +187,7 @@ class SparseVector1(dim1 : Int) extends Vector1(dim1) {
   val values = new ArrayBuffer[Double]()
 
   def length : Int = dim1
+  def activeLength : Int = indices.length + map.size
 
   def apply(i : Int): Double = {
     if(posMap.contains(i)) {
@@ -167,6 +196,24 @@ class SparseVector1(dim1 : Int) extends Vector1(dim1) {
     } else if(map.contains(i)) {
       map(i)
     } else 0.0
+  }
+
+  def add(i : Int, v : Double) : Unit = {
+    if(posMap.contains(i)) {
+      val pos = posMap(i)
+      values(pos) += v
+    } else if(map.contains(i)) {
+      map(i) += v
+    } else map(i) = v
+  }
+
+  def mult(i : Int, v : Double) : Unit = {
+    if(posMap.contains(i)) {
+      val pos = posMap(i)
+      values(pos) *= v
+    } else if(map.contains(i)) {
+      map(i) *= v
+    }
   }
 
   def mergeMap() : Unit = {
@@ -179,13 +226,23 @@ class SparseVector1(dim1 : Int) extends Vector1(dim1) {
         if(indices(si) < sortedMap(ii)._1) {
           si += 1
         } else {
-          
+          indices.insert(si, sortedMap(ii)._1)
+          values.insert(si, sortedMap(ii)._2)
+          if(lastInc >= 0) {
+            for(j <- lastInc until si) {
+              posMap(indices(j)) += incBy
+            }
+          }
+          lastInc = si+1
+          incBy += 1
+          ii += 1
         }
       }
     }
   }
 
   def activeElements : Seq[(Int,Double)] = {
+    mergeMap()
     indices.zip(values)
   }
 
@@ -199,14 +256,31 @@ class SparseVector1(dim1 : Int) extends Vector1(dim1) {
     }
   }
 
+  def toDense : DenseVector1 = {
+    val o = new DenseVector1(dim1)
+    for(e <- activeElements) {
+      o(e._1) = e._2
+    }
+    o
+  }
+
+  def dot(v : Vector): Double = {
+    if(this.activeLength > v.activeLength) {
+      v.activeElements.map(e => e._2 * this(e._1)).sum
+    } else {
+      this.activeElements.map(e => e._2 * v(e._1)).sum
+    }
+  }
+
 
 }
 
-class Weights {
-
+class Weights(val model : Model) {
+  val factorWeights = new Array[Vector](model.families.size)
+  
 }
 
-class WeightsOld(val features : FeaturesDomain, val labels : LabelDomain) {
+/*class WeightsOld(val features : FeaturesDomain, val labels : LabelDomain) {
   val obsWeights = new Array[Array[Array[Double]]](features.size)
   var count = 0
 
@@ -319,4 +393,4 @@ class WeightsOld(val features : FeaturesDomain, val labels : LabelDomain) {
     println("")
   }
 
-}
+}*/
