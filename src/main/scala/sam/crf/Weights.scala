@@ -50,7 +50,8 @@ class FeaturesDomain[F] extends Domain[F] {
 
 class StringFeaturesDomain[String] extends FeaturesDomain[String] {
   def +=(feature : String, value : String) : Unit = {
-    super.+=( (feature + ":+:" + value))
+    val s = feature + ":+:" + value
+    super.+=(s)
   }
 }
 
@@ -140,7 +141,9 @@ abstract class Vector extends Seq[Double] {
 
 }
 
-abstract class Vector1(val dim1 : Int)
+abstract class Vector1(val dim1 : Int) extends Vector
+abstract class Vector2(val dim1 : Int, val dim2 : Int) extends Vector
+abstract class Vector3(val dim1 : Int, val dim2 : Int, val dim3 : Int) extends Vector
 
 class DenseVector1(dim1 : Int) extends Vector1(dim1) {
   val elements = new Array[Double](dim1)
@@ -179,22 +182,128 @@ class DenseVector1(dim1 : Int) extends Vector1(dim1) {
   }
 }
 
+class DenseVector2(dim1 : Int, dim2 : Int) extends Vector2(dim1, dim2) {
+  val elements = new Array[Double](dim1*dim2)
+
+  def length : Int = elements.length
+  def activeLength : Int = elements.length
+
+  def apply(i : Int) = elements(i)
+
+  def indexOf(i : Int, j : Int) = i * dim1 + j
+
+  def apply(i : Int, j : Int) = elements(indexOf(i,j))
+
+  def add(i : Int, v : Double) : Unit = {
+    elements(i) += v
+  }
+
+  def add(i : Int, j : Int, v : Double) : Unit = {
+    elements(indexOf(i,j)) += v
+  }
+
+  def mult(i : Int, v : Double) : Unit = {
+    elements(indexOf(i)) *= v
+  }
+
+  def mult(i : Int, j : Int, v : Double) : Unit = {
+    elements(indexOf(i,j)) *= v
+  }
+
+  def update(i : Int, v : Double) : Unit = {
+    elements(i) = v
+  }
+
+  def update(i : Int, j : Int, v : Double) : Unit = {
+    elements(indexOf(i,j)) = v
+  }
+
+  def iterator : Iterator[Double] = {
+    elements.toIterator
+  }
+
+  def toSparse : SparseVector1 = {
+    val o = new SparseVector1(dim1)
+    for(i <- 0 until length) {
+      if(this(i) != 0.0) o(i) = this(i)
+    }
+    o
+  }
+
+  def activeElements : Seq[(Int,Double)] = {
+    (0 until length).zip(elements)
+  }
+}
+
+class DenseVector3(dim1 : Int, dim2 : Int, dim3 : Int) extends Vector3(dim1, dim2, dim3) {
+  val elements = new Array[Double](dim1*dim2*dim3)
+
+  def length : Int = elements.length
+  def activeLength : Int = elements.length
+
+  def apply(i : Int) = elements(i)
+
+  def indexOf(i : Int, j : Int, k : Int) = (i * dim1 * dim2) + (j * dim2) + k
+
+  def apply(i : Int, j : Int, k : Int) = elements(indexOf(i,j,k))
+
+  def add(i : Int, v : Double) : Unit = {
+    elements(i) += v
+  }
+
+  def add(i : Int, j : Int, k : Int, v : Double) : Unit = {
+    elements(indexOf(i,j,k)) += v
+  }
+
+  def mult(i : Int, v : Double) : Unit = {
+    elements(indexOf(i)) *= v
+  }
+
+  def mult(i : Int, j : Int, k : Int, v : Double) : Unit = {
+    elements(indexOf(i,j,k)) *= v
+  }
+
+  def update(i : Int, v : Double) : Unit = {
+    elements(i) = v
+  }
+
+  def update(i : Int, j : Int, k : Int, v : Double) : Unit = {
+    elements(indexOf(i,j,k)) = v
+  }
+
+  def iterator : Iterator[Double] = {
+    elements.toIterator
+  }
+
+  def toSparse : SparseVector1 = {
+    val o = new SparseVector1(dim1)
+    for(i <- 0 until length) {
+      if(this(i) != 0.0) o(i) = this(i)
+    }
+    o
+  }
+
+  def activeElements : Seq[(Int,Double)] = {
+    (0 until length).zip(elements)
+  }
+}
+
 class SparseVector1(dim1 : Int) extends Vector1(dim1) {
-  val map = new mutable.HashMap[Int, Double]()
+  val tempMap = new mutable.HashMap[Int, Double]()
 
   val posMap = new mutable.HashMap[Int, Int]()
-  val indices = new ArrayBuffer[Int]()
+  val indexes = new ArrayBuffer[Int]()
   val values = new ArrayBuffer[Double]()
 
   def length : Int = dim1
-  def activeLength : Int = indices.length + map.size
+  def activeLength : Int = indexes.length + tempMap.size
 
   def apply(i : Int): Double = {
     if(posMap.contains(i)) {
       val pos = posMap(i)
       values(pos)
-    } else if(map.contains(i)) {
-      map(i)
+    } else if(tempMap.contains(i)) {
+      tempMap(i)
     } else 0.0
   }
 
@@ -202,35 +311,40 @@ class SparseVector1(dim1 : Int) extends Vector1(dim1) {
     if(posMap.contains(i)) {
       val pos = posMap(i)
       values(pos) += v
-    } else if(map.contains(i)) {
-      map(i) += v
-    } else map(i) = v
+    } else if(tempMap.contains(i)) {
+      tempMap(i) += v
+    } else tempMap(i) = v
+  }
+
+  def iterator : Iterator[Double] = {
+    mergeMap()
+    values.toIterator
   }
 
   def mult(i : Int, v : Double) : Unit = {
     if(posMap.contains(i)) {
       val pos = posMap(i)
       values(pos) *= v
-    } else if(map.contains(i)) {
-      map(i) *= v
+    } else if(tempMap.contains(i)) {
+      tempMap(i) *= v
     }
   }
 
   def mergeMap() : Unit = {
-    if(map.size > 0) {
-      val sortedMap =  map.toSeq.sortBy(_._1)
+    if(tempMap.size > 0) {
+      val sortedMap =  tempMap.toSeq.sortBy(_._1)
       var si = 0; var ii = 0
       var lastInc = -1
       var incBy = 0
-      for(i <- 0 until indices.length + sortedMap.length) {
-        if(indices(si) < sortedMap(ii)._1) {
+      for(i <- 0 until indexes.length + sortedMap.length) {
+        if(indexes(si) < sortedMap(ii)._1) {
           si += 1
         } else {
-          indices.insert(si, sortedMap(ii)._1)
+          indexes.insert(si, sortedMap(ii)._1)
           values.insert(si, sortedMap(ii)._2)
           if(lastInc >= 0) {
             for(j <- lastInc until si) {
-              posMap(indices(j)) += incBy
+              posMap(indexes(j)) += incBy
             }
           }
           lastInc = si+1
@@ -243,7 +357,7 @@ class SparseVector1(dim1 : Int) extends Vector1(dim1) {
 
   def activeElements : Seq[(Int,Double)] = {
     mergeMap()
-    indices.zip(values)
+    indexes.zip(values)
   }
 
   def update(i : Int, v : Double) : Unit = {
@@ -252,7 +366,7 @@ class SparseVector1(dim1 : Int) extends Vector1(dim1) {
       val pos = posMap(i)
       values(pos) = v
     } else {
-      map(i) = v
+      tempMap(i) = v
     }
   }
 
@@ -264,7 +378,7 @@ class SparseVector1(dim1 : Int) extends Vector1(dim1) {
     o
   }
 
-  def dot(v : Vector): Double = {
+  override def dot(v : Vector): Double = {
     if(this.activeLength > v.activeLength) {
       v.activeElements.map(e => e._2 * this(e._1)).sum
     } else {
@@ -277,7 +391,24 @@ class SparseVector1(dim1 : Int) extends Vector1(dim1) {
 
 class Weights(val model : Model) {
   val factorWeights = new Array[Vector](model.families.size)
-  
+  var activeWeights = 0
+  for(fam <- model.families) fam match {
+    case f : Family1 => {
+      factorWeights(activeWeights) = new DenseVector1(f.dim1)
+      f.weightIndex = activeWeights
+      activeWeights += 1
+    }
+    case f : Family2 => {
+      factorWeights(activeWeights) = new DenseVector2(f.dim1, f.dim2)
+      f.weightIndex = activeWeights
+      activeWeights += 1
+    }
+    case f : Family3 => {
+      factorWeights(activeWeights) = new DenseVector3(f.dim1, f.dim2, f.dim3)
+      f.weightIndex = activeWeights
+      activeWeights += 1
+    }
+  }
 }
 
 /*class WeightsOld(val features : FeaturesDomain, val labels : LabelDomain) {
