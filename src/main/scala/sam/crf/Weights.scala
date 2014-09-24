@@ -1,7 +1,7 @@
 package sam.crf
 
 import java.util
-
+import scala.reflect.runtime.universe._
 import edu.umass.nlp.ml.feats.WeightsManager
 
 import scala.collection.mutable
@@ -11,104 +11,6 @@ import scala.io.Source
 /**
  * Created by samanzaroot on 9/19/14.
  */
-
-abstract class Domain[A] {
-  val values : ArrayBuffer[A]
-}
-
-class FeaturesDomain[F] extends Domain[F] {
-  val values = new ArrayBuffer[F]()
-  val reverseMap = new mutable.HashMap[F, Int]()
-  var _frozen = false
-
-  def freeze(): Unit = {
-    _frozen = true
-  }
-
-  def unfreeze() : Unit = {
-    _frozen = false
-  }
-
-  def +=(feature : F): Unit = {
-    if(!_frozen) {
-      if(!reverseMap.contains(feature)) {
-        values += feature
-        reverseMap(feature) = values.length - 1
-      }
-    }
-  }
-
-  def featureIndex(feature : F) : Int = {
-    reverseMap(feature)
-  }
-
-  def featureValue(index : Int) : F = {
-    values(index)
-  }
-  def size = values.size
-}
-
-class StringFeaturesDomain[String] extends FeaturesDomain[String] {
-  def +=(feature : String, value : String) : Unit = {
-    val s = feature + ":+:" + value
-    super.+=(s)
-  }
-}
-
-class DoubleIndexedFeatureDomain extends FeaturesDomain[String] {
-
-  var features = new ArrayBuffer[String]
-  var featuresValues = new ArrayBuffer[ArrayBuffer[String]]()
-
-  var reverseFeatureValuesMap = new ArrayBuffer[mutable.HashMap[String, Int]]()
-  var reverseFeatureMap = new mutable.HashMap[String, Int]()
-
-  /*def initialize(file : String): Unit = {
-    for(line <- Source.fromFile(file).getLines()) {
-      var split = line.split("->")
-      features.append((split(0).toInt to split(1).toInt).toArray)
-    }
-  }*/
-
-  override def +=(feature : String) {
-    System.err.println("Tried to to add unindexed feature into indexed feature domain")
-    System.exit(1)
-  }
-
-  def +=(feature : String, value : String): Unit = {
-    if(!_frozen) {
-      if(!reverseFeatureMap.contains(feature)) {
-        features += feature
-        reverseFeatureMap(feature) = features.length-1
-        featuresValues(features.length-1) = new ArrayBuffer[String]()
-        reverseFeatureValuesMap(features.length-1) = new mutable.HashMap[String,Int]()
-      }
-      val featureIndex = reverseFeatureMap(feature)
-      if(!reverseFeatureValuesMap(featureIndex).contains(value)) {
-        featuresValues(featureIndex) += value
-        reverseFeatureValuesMap(featureIndex)(value) = featuresValues(featureIndex).length-1
-      }
-    }
-    super.+=(feature+"+:+"+value)
-  }
-
-
-  /*def featureIndex(featureIndex : Int, value : Int) : Int = {
-    val start = features(featureIndex).head
-    value - start
-  }*/
-}
-
-class LabelDomain extends Domain[String] {
-  val values = new ArrayBuffer[String]()
-  val labels = values
-  def until = labels.length
-  def length = labels.length
-  def initialize(till : Int): Unit = {
-   values ++= (0 until till).map(_.toString).toArray
-  }
-}
-
 abstract class Vector extends Seq[Double] {
   def +=(o : Vector): Unit = {
     assert(o.length == this.length, "Vector lengths must match for addition")
@@ -118,7 +20,8 @@ abstract class Vector extends Seq[Double] {
   def +=(inc : Double) : Unit = {
     (0 until length).map( i=> this.add(i,inc))
   }
-
+  def apply(i : Int) : Double
+  def update(i : Int, d : Double) : Unit
   def add(i : Int, v : Double) : Unit
   def mult(i : Int, v : Double) : Unit
 
@@ -136,12 +39,15 @@ abstract class Vector extends Seq[Double] {
     (0 until length).map( i=> this.mult(i, inc))
   }
 
+  def outer(o : Vector) : Vector
+
   def activeElements : Seq[(Int,Double)]
   def activeLength : Int
 
+  def logSumExp : Double
 }
 
-abstract class Vector1(val dim1 : Int) extends Vector
+abstract class Vector1(var dim1 : Int) extends Vector
 abstract class Vector2(val dim1 : Int, val dim2 : Int) extends Vector
 abstract class Vector3(val dim1 : Int, val dim2 : Int, val dim3 : Int) extends Vector
 
@@ -169,6 +75,16 @@ class DenseVector1(dim1 : Int) extends Vector1(dim1) {
     elements.toIterator
   }
 
+  def outer(o : Vector) : Vector = {
+    val prodLength = o.length*this.length
+    val prod = new DenseVector1(prodLength)
+    for(i <- 0 until this.length; j <- 0 until this.length) {
+      val index = i*this.length + j
+      prod.update(index, this(i)*o(j))
+    }
+    prod
+  }
+
   def toSparse : SparseVector1 = {
     val o = new SparseVector1(dim1)
     for(i <- 0 until length) {
@@ -179,6 +95,19 @@ class DenseVector1(dim1 : Int) extends Vector1(dim1) {
 
   def activeElements : Seq[(Int,Double)] = {
     (0 until length).zip(elements)
+  }
+  def logSumExp : Double = {
+    if (this.length == 1) return this(0);
+    val max = elements.max
+    var sum = 0.0
+    val until = elements.length
+    var i = 0
+    while(i < until) {
+      if (elements(i) != Double.NegativeInfinity)
+        sum += math.exp(elements(i) - max)
+      i += 1
+    }
+    max + math.log(sum)
   }
 }
 
@@ -222,6 +151,16 @@ class DenseVector2(dim1 : Int, dim2 : Int) extends Vector2(dim1, dim2) {
     elements.toIterator
   }
 
+  def outer(o : Vector) : Vector = {
+    val prodLength = o.length*this.length
+    val prod = new DenseVector1(prodLength)
+    for(i <- 0 until this.length; j <- 0 until this.length) {
+      val index = i*this.length + j
+      prod.update(index, this(i)*o(j))
+    }
+    prod
+  }
+
   def toSparse : SparseVector1 = {
     val o = new SparseVector1(dim1)
     for(i <- 0 until length) {
@@ -232,6 +171,20 @@ class DenseVector2(dim1 : Int, dim2 : Int) extends Vector2(dim1, dim2) {
 
   def activeElements : Seq[(Int,Double)] = {
     (0 until length).zip(elements)
+  }
+
+  def logSumExp : Double = {
+    if (this.length == 1) return this(0);
+    val max = elements.max
+    var sum = 0.0
+    val until = elements.length
+    var i = 0
+    while(i < until) {
+      if (elements(i) != Double.NegativeInfinity)
+        sum += math.exp(elements(i) - max)
+      i += 1
+    }
+    max + math.log(sum)
   }
 }
 
@@ -283,12 +236,91 @@ class DenseVector3(dim1 : Int, dim2 : Int, dim3 : Int) extends Vector3(dim1, dim
     o
   }
 
+  def outer(o : Vector) : Vector = {
+    val prodLength = o.length*this.length
+    val prod = new DenseVector1(prodLength)
+    for(i <- 0 until this.length; j <- 0 until this.length) {
+      val index = i*this.length + j
+      prod.update(index, this(i)*o(j))
+    }
+    prod
+  }
+
   def activeElements : Seq[(Int,Double)] = {
     (0 until length).zip(elements)
   }
+
+  def logSumExp : Double = {
+    if (this.length == 1) return this(0);
+    val max = elements.max
+    var sum = 0.0
+    val until = elements.length
+    var i = 0
+    while(i < until) {
+      if (elements(i) != Double.NegativeInfinity)
+        sum += math.exp(elements(i) - max)
+      i += 1
+    }
+    max + math.log(sum)
+  }
 }
 
-class SparseVector1(dim1 : Int) extends Vector1(dim1) {
+class OneHotVector(dim1 : Int) extends Vector1(dim1) {
+  var index : Int = 0
+  var value : Double = 1.0
+  val length = dim1
+  def mult(i : Int, v : Double) : Unit = {
+    assert(i==index, "Mult on 1 hot must be on indexed element")
+  }
+  def add(i : Int, v : Double) : Unit = {
+    assert(i==index, "Add on 1 hot must be on indexed element")
+  }
+  val activeLength = 1
+  def apply(i : Int) : Double = {
+    if(i==index) value else 0.0
+  }
+
+  def update(i : Int, d : Double) : Unit = {
+    assert(i==index, "Update on 1 hot must be on indexed element")
+    value = d
+  }
+
+  def activeElements : Seq[(Int,Double)] = Seq((index,value))
+
+  def iterator : Iterator[Double] = {
+    Array(value).toIterator
+  }
+  override def dot(o : Vector) : Double = {
+    assert(o.length == this.length, "Vector length must match for dot product")
+    o(index)*value
+  }
+  def outer(o : Vector) : Vector = {
+    val prodLength = o.length*this.length
+    o match {
+      case v : SparseVector1 => {
+          val prod = new SparseVector1(prodLength)
+          for(e <- v.activeElements) {
+            val index = this.index*this.length + e._1
+            prod.update(index, this.value*e._2)
+          }
+        prod
+      }
+      case v : _ => {
+        val prod = new DenseVector1(prodLength)
+        for(e <- v.activeElements) {
+          val index = this.index*this.length + e._1
+          prod.update(index, this.value*e._2)
+        }
+        prod
+      }
+    }
+ }
+  def logSumExp : Double = {
+    value
+  }
+}
+
+class SparseVector1(dim : Int) extends Vector1(dim) {
   val tempMap = new mutable.HashMap[Int, Double]()
 
   val posMap = new mutable.HashMap[Int, Int]()
@@ -308,6 +340,9 @@ class SparseVector1(dim1 : Int) extends Vector1(dim1) {
   }
 
   def add(i : Int, v : Double) : Unit = {
+    if(i > length-1) {
+      dim1 = i+1
+    }
     if(posMap.contains(i)) {
       val pos = posMap(i)
       values(pos) += v
@@ -361,7 +396,10 @@ class SparseVector1(dim1 : Int) extends Vector1(dim1) {
   }
 
   def update(i : Int, v : Double) : Unit = {
-    assert(i < dim1 && i >= 0, "Index out of bounds on setting sparse vector")
+    assert(i >= 0, "Index out of bounds on setting sparse vector")
+    if(i > length-1) {
+      dim1 = i+1
+    }
     if(posMap.contains(i)) {
       val pos = posMap(i)
       values(pos) = v
@@ -386,7 +424,48 @@ class SparseVector1(dim1 : Int) extends Vector1(dim1) {
     }
   }
 
+  def outer(o : Vector) : Vector = {
+    val prodLength = o.length*this.length
+    val prod = new SparseVector1(prodLength)
+    for(te <- this.activeElements) {
+      for(e <- o.activeElements) {
+        val index = te._1*this.length + e._1
+        prod.update(index, te._2*e._2)
+      }
+    }
+    prod
+  }
 
+  def logSumExp : Double = {
+    val elements = activeElements.map(_._2)
+    if (this.length == 1) return this(0);
+    val max = elements.max
+    var sum = 0.0
+    val until = elements.length
+    var i = 0
+    while(i < until) {
+      if (elements(i) != Double.NegativeInfinity)
+        sum += math.exp(elements(i) - max)
+      i += 1
+    }
+    max + math.log(sum)
+  }
+}
+
+class SparseBinaryVector1(dim : Int) extends SparseVector1(dim) {
+  override def update(i : Int, v : Double) : Unit = {
+    assert(v==1.0 || v==0.0, "vector value must be 1.0 or 0.0")
+    super.update(i,v)
+  }
+  override def add(i : Int, v : Double) {
+    assert(v==1.0, "Can only add 1.0 to binary vector")
+  }
+  override def mult(i : Int, v : Double): Unit = {
+    assert(v==1.0, "Can only mult by 1.0 to binary vector")
+  }
+  def update(i : Int) : Unit = {
+    super.update(i,1.0)
+  }
 }
 
 class Weights(val model : Model) {
@@ -409,6 +488,7 @@ class Weights(val model : Model) {
       activeWeights += 1
     }
   }
+  def apply(i : Int) = factorWeights(i)
 }
 
 /*class WeightsOld(val features : FeaturesDomain, val labels : LabelDomain) {

@@ -5,7 +5,27 @@ import scala.collection.mutable.ArrayBuffer
 import java.io.File
 import scala.collection.mutable
 
-class ChainModel(domainFile : String, labelDomainSize : Int, ff : (String=>Array[Int])) {
+abstract class ChainModel[L <: LabelDomain, R <: FeaturesDomain](val labelDomain : L, val featureDomain : R) extends Model {
+  val observationFamily = new Family2[L,R](labelDomain, featureDomain)
+  val transitionFamily = new Family2[L,L](labelDomain,labelDomain)
+  families += observationFamily
+  families += transitionFamily
+
+  def labelToFeature(l : labelDomain.valuetype) : featureDomain.valuetype
+
+  def factors(e : Example) : Seq[Factor] = {
+    val allFactors = ArrayBuffer[Factor]()
+    for(i <- 0 until e.length) {
+      allFactors += observationFamily.factor(e(i), labelToFeature(e(i)), this)
+      if(i+1 < e.length-1) {
+        allFactors += transitionFamily.factor(e(i), e(i+1), this)
+      }
+    }
+    allFactors.toSeq
+  }
+}
+
+/*class ChainModel(domainFile : String, labelDomainSize : Int, ff : (String=>Array[Int])) {
   
   val featuresDomain = new FeaturesDomain(domainFile)
   val labelDomain = new LabelDomain(labelDomainSize)
@@ -112,4 +132,4 @@ class ChainModel(domainFile : String, labelDomainSize : Int, ff : (String=>Array
     // Save the weights to disk
   }
 
-}
+}*/

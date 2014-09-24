@@ -2,7 +2,7 @@ package sam.crf
 
 import math._
 import scala.collection.mutable.ArrayBuffer
-class Factor(val weights : Weights) {}
+/*class Factor(val weights : Weights) {}
 class ObservationFactor(val observation : Observation, val label : Label, weights : Weights) extends Factor(weights) {
 	observation.factor = this
 	label.observationFactor = this
@@ -34,4 +34,4 @@ class TransitionFactor(val left : Label, val right : Label, weights : Weights) e
   def log(yi : Int, yPlus : Int) : Double = weights(yi, yPlus)
 
   def size = weights.labels.until
-}
+}*/
